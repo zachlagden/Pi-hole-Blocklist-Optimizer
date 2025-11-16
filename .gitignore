@@ -1,3 +1,15 @@
-venv/
-pihole_blocklists/
+# envs
+.venv/
+
+# development
+dev/
+
+# temporary files
+temp/
+
+# production blocklists
 pihole_blocklists_prod/
+
+# Claude AI
+.claude/
+.CLAUDE

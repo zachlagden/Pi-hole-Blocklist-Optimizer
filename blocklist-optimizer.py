@@ -26,15 +26,18 @@ import hashlib
 import concurrent.futures
 import platform
 import json
+import shutil
 from tqdm import tqdm
 
-# Configure logging
+# Configure logging (log file will be in temp directory)
+# Create temp directory for logs if it doesn't exist
+os.makedirs("temp", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('pihole_downloader.log')
+        logging.FileHandler('temp/pihole_downloader.log')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -43,7 +46,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONFIG_FILE = "blocklists.conf"
 
 # Default directories
-BASE_DIR = "pihole_blocklists"
+TEMP_DIR = "temp"
 PROD_DIR = "pihole_blocklists_prod"
 
 # Define regular expressions for domain extraction
@@ -54,19 +57,25 @@ ADBLOCK_PATTERN = re.compile(r'^\|\|(.+?)\^(?:\$.*)?$')
 IP_DOMAIN_PATTERN = re.compile(r'^\s*\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s+(\S+)$')
 
 class BlocklistManager:
-    def __init__(self, config_file=DEFAULT_CONFIG_FILE, base_dir=BASE_DIR, prod_dir=PROD_DIR, 
-                 threads=4, skip_download=False, skip_optimize=False, quiet=False, verbose=False):
+    def __init__(self, config_file=DEFAULT_CONFIG_FILE, temp_dir=TEMP_DIR, prod_dir=PROD_DIR,
+                 threads=4, skip_download=False, skip_optimize=False, quiet=False, verbose=False,
+                 whitelist_config="whitelists.conf", skip_whitelist=False, skip_delete=False):
         self.config_file = config_file
-        self.base_dir = base_dir
+        self.temp_dir = temp_dir
         self.prod_dir = prod_dir
         self.threads = max(1, min(threads, 16))  # Limit threads between 1 and 16
         self.skip_download = skip_download
         self.skip_optimize = skip_optimize
         self.quiet = quiet
         self.verbose = verbose
+        self.whitelist_config = whitelist_config
+        self.skip_whitelist = skip_whitelist
+        self.skip_delete = skip_delete
         self.blocklists = []
+        self.whitelists = []
         self.categories = set()
         self.domain_stats = {}
+        self.whitelist_domains = set()
         self.failed_lists = []
         
         # Statistics
@@ -78,6 +87,12 @@ class BlocklistManager:
             'unique_domains': 0,
             'duplicate_domains': 0,
             'categories': {},
+            'whitelist': {
+                'total_whitelists': 0,
+                'whitelist_domains': 0,
+                'total_removed': 0,
+                'removed_by_category': {},
+            },
             'system_info': self._get_system_info(),
             'start_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         }
@@ -152,19 +167,106 @@ class BlocklistManager:
         except Exception as e:
             logger.error(f"Failed to load configuration: {e}")
             sys.exit(1)
-    
+
+    def load_whitelist_config(self):
+        """Load whitelist configuration from file."""
+        # Whitelist is optional, so don't error if file doesn't exist
+        if not os.path.exists(self.whitelist_config):
+            logger.info(f"No whitelist configuration file found at '{self.whitelist_config}' (optional)")
+            return
+
+        logger.info(f"Loading whitelist configuration from {self.whitelist_config}")
+        try:
+            with open(self.whitelist_config, 'r', encoding='utf-8') as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+
+                    # Skip comments and empty lines
+                    if not line or line.startswith('#'):
+                        continue
+
+                    # Parse line
+                    try:
+                        parts = line.split('|')
+                        if len(parts) != 3:
+                            logger.warning(f"Invalid format in whitelist line {line_num}: {line}")
+                            continue
+
+                        source, name, whitelist_marker = parts
+                        source = source.strip()
+                        name = name.strip()
+                        whitelist_marker = whitelist_marker.strip()
+
+                        # Verify the third field says 'whitelist'
+                        if whitelist_marker.lower() != 'whitelist':
+                            logger.warning(f"Invalid whitelist marker in line {line_num}: expected 'whitelist', got '{whitelist_marker}'")
+                            continue
+
+                        # Check if it's a local file (file://) or a URL
+                        is_local_file = source.startswith('file://')
+
+                        if is_local_file:
+                            # Remove file:// prefix and validate the path
+                            file_path = source[7:]  # Remove 'file://'
+
+                            # Handle relative paths
+                            if not os.path.isabs(file_path):
+                                # Make it relative to the script directory
+                                file_path = os.path.abspath(file_path)
+
+                            if not os.path.exists(file_path):
+                                logger.warning(f"Local whitelist file not found: {file_path}")
+                                continue
+
+                            self.whitelists.append({
+                                'source': source,
+                                'file_path': file_path,
+                                'name': name,
+                                'is_local': True,
+                            })
+                        else:
+                            # Validate URL
+                            try:
+                                result = urlparse(source)
+                                if not all([result.scheme, result.netloc]):
+                                    logger.warning(f"Invalid URL in whitelist line {line_num}: {source}")
+                                    continue
+                            except Exception:
+                                logger.warning(f"Invalid URL in whitelist line {line_num}: {source}")
+                                continue
+
+                            self.whitelists.append({
+                                'source': source,
+                                'url': source,
+                                'name': name,
+                                'is_local': False,
+                            })
+                    except Exception as e:
+                        logger.warning(f"Error parsing whitelist line {line_num}: {e}")
+
+            self.stats['whitelist']['total_whitelists'] = len(self.whitelists)
+            if len(self.whitelists) > 0:
+                logger.info(f"Loaded {len(self.whitelists)} whitelist source(s)")
+            else:
+                logger.info("No valid whitelist entries found (continuing without whitelist)")
+
+        except Exception as e:
+            logger.error(f"Failed to load whitelist configuration: {e}")
+            # Don't exit - whitelist is optional
+            logger.warning("Continuing without whitelist processing")
+
     def create_directories(self):
         """Create the necessary directory structure."""
-        # Create base directory
-        os.makedirs(self.base_dir, exist_ok=True)
-        logger.info(f"Created base directory: {os.path.abspath(self.base_dir)}")
-        
-        # Create category subdirectories
+        # Create temp directory
+        os.makedirs(self.temp_dir, exist_ok=True)
+        logger.info(f"Created temporary directory: {os.path.abspath(self.temp_dir)}")
+
+        # Create category subdirectories in temp
         for category in self.categories:
-            path = os.path.join(self.base_dir, category)
+            path = os.path.join(self.temp_dir, category)
             os.makedirs(path, exist_ok=True)
-            logger.debug(f"Created directory: {path}")
-        
+            logger.debug(f"Created temp category directory: {path}")
+
         # Create production directory
         os.makedirs(self.prod_dir, exist_ok=True)
         logger.info(f"Created production directory: {os.path.abspath(self.prod_dir)}")
@@ -379,9 +481,9 @@ class BlocklistManager:
         url = blocklist['url']
         name = blocklist['name']
         category = blocklist['category']
-        
+
         filename = f"{name}.txt"
-        destination = os.path.join(self.base_dir, category, filename)
+        destination = os.path.join(self.temp_dir, category, filename)
         abs_destination = os.path.abspath(destination)
         
         logger.info(f"Processing: {name} ({category})")
@@ -488,7 +590,87 @@ class BlocklistManager:
         else:
             logger.info(f"  Download skipped")
             return True, 0, set()
-    
+
+    def process_whitelist(self, whitelist):
+        """Process a single whitelist (download or read local file)."""
+        source = whitelist['source']
+        name = whitelist['name']
+        is_local = whitelist['is_local']
+
+        logger.info(f"Processing whitelist: {name}")
+
+        try:
+            # Get content either from URL or local file
+            if is_local:
+                file_path = whitelist['file_path']
+                logger.debug(f"  Reading local file: {file_path}")
+                with open(file_path, 'rb') as f:
+                    content = f.read()
+            else:
+                url = whitelist['url']
+                logger.debug(f"  Downloading from: {url}")
+                response = requests.get(url, timeout=30)
+                response.raise_for_status()
+                content = response.content
+
+            # Extract domains from content
+            domains = set()
+            try:
+                lines = content.decode('utf-8', errors='ignore').splitlines()
+                for line in lines:
+                    line = line.strip()
+                    # Skip empty lines and comments
+                    if not line or line.startswith('#') or line.startswith('!'):
+                        continue
+
+                    # Extract domain using the existing method
+                    domain = self.extract_domain_from_line(line)
+                    if domain:
+                        domains.add(domain.lower())
+
+            except Exception as e:
+                logger.error(f"  Error parsing whitelist content: {e}")
+                return False, 0
+
+            domain_count = len(domains)
+            logger.info(f"  Loaded {domain_count} domains from whitelist")
+
+            # Add to global whitelist domains
+            self.whitelist_domains.update(domains)
+
+            return True, domain_count
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"  Error downloading whitelist from {source}: {e}")
+            return False, 0
+        except IOError as e:
+            logger.error(f"  Error reading local whitelist file {source}: {e}")
+            return False, 0
+        except Exception as e:
+            logger.error(f"  Error processing whitelist {name}: {e}")
+            return False, 0
+
+    def apply_whitelist(self, domains, category=None):
+        """Apply whitelist filtering to a set of domains."""
+        if not self.whitelist_domains or len(self.whitelist_domains) == 0:
+            return domains  # No whitelist to apply
+
+        original_count = len(domains)
+        filtered_domains = domains - self.whitelist_domains
+        removed_count = original_count - len(filtered_domains)
+
+        if removed_count > 0:
+            if category:
+                logger.info(f"  Removed {removed_count} whitelisted domains from {category}")
+                self.stats['whitelist']['removed_by_category'][category] = removed_count
+            else:
+                logger.info(f"  Removed {removed_count} whitelisted domains")
+
+            # Track total removed
+            self.stats['whitelist']['total_removed'] += removed_count
+
+        return filtered_domains
+
     def create_production_lists(self):
         """Create optimized production blocklists."""
         logger.info("Creating production blocklists...")
@@ -501,13 +683,39 @@ class BlocklistManager:
         for name, stats in self.domain_stats.items():
             category = stats['category']
             domains = stats['domains']
-            
+
             # Add to all domains
             all_domains.update(domains)
-            
+
             # Add to category domains
             category_domains[category].update(domains)
-        
+
+        # Apply whitelist filtering if enabled
+        if not self.skip_whitelist and len(self.whitelist_domains) > 0:
+            logger.info(f"Applying whitelist with {len(self.whitelist_domains)} domains...")
+
+            # Store removed domains for reporting
+            removed_domains = all_domains.intersection(self.whitelist_domains)
+
+            # Apply to master list
+            all_domains = self.apply_whitelist(all_domains)
+
+            # Apply to each category
+            for category in category_domains:
+                category_domains[category] = self.apply_whitelist(category_domains[category], category)
+
+            # Save list of whitelisted domains
+            if len(removed_domains) > 0:
+                whitelist_report_file = os.path.join(self.prod_dir, "whitelisted_domains.txt")
+                with open(whitelist_report_file, 'w', encoding='utf-8') as f:
+                    f.write(f"# Whitelisted Domains Removed from Blocklists\n")
+                    f.write(f"# Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"# Total whitelisted domains: {len(self.whitelist_domains)}\n")
+                    f.write(f"# Domains removed from blocklists: {len(removed_domains)}\n\n")
+                    for domain in sorted(removed_domains):
+                        f.write(f"{domain}\n")
+                logger.info(f"Whitelisted domains report saved to: {os.path.abspath(whitelist_report_file)}")
+
         # Track duplicate statistics
         duplicate_count = 0
         for category1, domains1 in category_domains.items():
@@ -591,7 +799,7 @@ class BlocklistManager:
     
     def create_stats_report(self):
         """Generate statistics report."""
-        stats_file = os.path.join(self.base_dir, "blocklist_stats.txt")
+        stats_file = os.path.join(self.prod_dir, "blocklist_stats.txt")
         
         with open(stats_file, 'w', encoding='utf-8') as f:
             f.write("Pi-hole Blocklist Statistics\n")
@@ -603,7 +811,21 @@ class BlocklistManager:
             f.write(f"Total Domains (with duplicates): {self.stats['total_domains']}\n")
             f.write(f"Unique Domains: {self.stats['unique_domains']}\n")
             f.write(f"Duplicate Domains: {self.stats['duplicate_domains']}\n\n")
-            
+
+            # Whitelist statistics
+            if not self.skip_whitelist and self.stats['whitelist']['whitelist_domains'] > 0:
+                f.write("Whitelist Statistics\n")
+                f.write("-------------------\n")
+                f.write(f"Total Whitelist Sources: {self.stats['whitelist']['total_whitelists']}\n")
+                f.write(f"Total Whitelist Domains: {self.stats['whitelist']['whitelist_domains']}\n")
+                f.write(f"Domains Removed by Whitelist: {self.stats['whitelist']['total_removed']}\n")
+
+                if self.stats['whitelist']['removed_by_category']:
+                    f.write("\nDomains Removed by Category:\n")
+                    for category, count in sorted(self.stats['whitelist']['removed_by_category'].items()):
+                        f.write(f"  {category.capitalize()}: {count} domains\n")
+                f.write("\n")
+
             f.write("Lists by Category\n")
             f.write("-----------------\n")
             for category, stats in self.stats['categories'].items():
@@ -630,13 +852,27 @@ class BlocklistManager:
                     f.write(f"{failed['name']} ({failed['category']}): {failed['error']}\n")
         
         # Also save JSON stats
-        json_stats_file = os.path.join(self.base_dir, "blocklist_stats.json")
+        json_stats_file = os.path.join(self.prod_dir, "blocklist_stats.json")
         with open(json_stats_file, 'w', encoding='utf-8') as f:
             json.dump(self.stats, f, indent=2, default=str)
-            
+
         logger.info(f"Statistics report saved to: {stats_file}")
         logger.info(f"JSON statistics saved to: {json_stats_file}")
-    
+
+    def cleanup_temp_files(self):
+        """Clean up temporary files after processing."""
+        if not os.path.exists(self.temp_dir):
+            logger.debug(f"Temp directory does not exist, skipping cleanup")
+            return
+
+        try:
+            logger.info(f"Cleaning up temporary files in {self.temp_dir}...")
+            shutil.rmtree(self.temp_dir)
+            logger.info("Temporary files cleaned up successfully")
+        except Exception as e:
+            logger.warning(f"Failed to clean up temporary files: {e}")
+            logger.warning("You may need to manually delete the temp directory")
+
     def update_config_file(self):
         """Update the configuration file to comment out failed lists."""
         if not self.failed_lists:
@@ -692,10 +928,22 @@ class BlocklistManager:
         else:
             # Sequential processing
             for blocklist in tqdm(self.blocklists, 
-                                 desc="Processing blocklists", 
+                                 desc="Processing blocklists",
                                  disable=self.quiet):
                 self.process_blocklist(blocklist)
-        
+
+        # Process whitelists if not skipped
+        if not self.skip_whitelist and not self.skip_optimize:
+            self.load_whitelist_config()
+
+            if len(self.whitelists) > 0:
+                logger.info(f"Processing {len(self.whitelists)} whitelist(s)")
+
+                for whitelist in self.whitelists:
+                    success, count = self.process_whitelist(whitelist)
+                    if success:
+                        self.stats['whitelist']['whitelist_domains'] = len(self.whitelist_domains)
+
         # Create production lists
         if not self.skip_optimize:
             self.create_production_lists()
@@ -706,7 +954,13 @@ class BlocklistManager:
         # Update config file to disable failed lists
         if self.failed_lists:
             self.update_config_file()
-        
+
+        # Clean up temporary files unless skip_delete is set
+        if not self.skip_delete:
+            self.cleanup_temp_files()
+        else:
+            logger.info(f"Temporary files preserved in: {os.path.abspath(self.temp_dir)}")
+
         end_time = time.time()
         elapsed_time = end_time - start_time
         self.stats['elapsed_time'] = f"{elapsed_time:.2f} seconds"
@@ -718,11 +972,17 @@ class BlocklistManager:
         logger.info(f"Total Domains:     {self.stats['total_domains']}")
         logger.info(f"Unique Domains:    {self.stats['unique_domains']}")
         logger.info(f"Duplicate Domains: {self.stats['duplicate_domains']}")
+
+        # Show whitelist stats if applied
+        if not self.skip_whitelist and self.stats['whitelist']['whitelist_domains'] > 0:
+            logger.info(f"\nWhitelist Statistics:")
+            logger.info(f"Whitelist Sources: {self.stats['whitelist']['total_whitelists']}")
+            logger.info(f"Whitelist Domains: {self.stats['whitelist']['whitelist_domains']}")
+            logger.info(f"Domains Removed:   {self.stats['whitelist']['total_removed']}")
         
         if self.stats['successful'] > 0:
-            logger.info(f"\nOptimized blocklists saved to: {os.path.abspath(self.base_dir)}")
-            logger.info(f"Production blocklists saved to: {os.path.abspath(self.prod_dir)}")
-            logger.info(f"Statistics report saved to: {os.path.join(self.base_dir, 'blocklist_stats.txt')}")
+            logger.info(f"\nProduction blocklists saved to: {os.path.abspath(self.prod_dir)}")
+            logger.info(f"Statistics report saved to: {os.path.join(self.prod_dir, 'blocklist_stats.txt')}")
             
         # Return stats for potential external use
         return self.stats
@@ -736,16 +996,22 @@ def parse_arguments():
     
     parser.add_argument("-c", "--config", default=DEFAULT_CONFIG_FILE,
                         help=f"Configuration file (default: {DEFAULT_CONFIG_FILE})")
-    parser.add_argument("-b", "--base-dir", default=BASE_DIR,
-                        help=f"Base directory for raw and optimized lists")
+    parser.add_argument("--temp-dir", default=TEMP_DIR,
+                        help=f"Temporary directory for raw and optimized lists (default: {TEMP_DIR})")
     parser.add_argument("-p", "--prod-dir", default=PROD_DIR,
-                        help=f"Production directory for combined lists")
+                        help=f"Production directory for combined lists (default: {PROD_DIR})")
     parser.add_argument("-t", "--threads", type=int, default=4,
                         help="Number of download threads (1-16)")
     parser.add_argument("--skip-download", action="store_true",
                         help="Skip downloading files (use existing files)")
     parser.add_argument("--skip-optimize", action="store_true",
                         help="Skip optimization (just download)")
+    parser.add_argument("--skip-delete", action="store_true",
+                        help="Keep temporary files after processing (default: delete)")
+    parser.add_argument("--whitelist-config", default="whitelists.conf",
+                        help="Whitelist configuration file (default: whitelists.conf)")
+    parser.add_argument("--skip-whitelist", action="store_true",
+                        help="Skip whitelist processing even if configured")
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Enable verbose logging")
     parser.add_argument("-q", "--quiet", action="store_true",
@@ -777,13 +1043,16 @@ def main():
     # Create and run blocklist manager
     manager = BlocklistManager(
         config_file=args.config,
-        base_dir=args.base_dir,
+        temp_dir=args.temp_dir,
         prod_dir=args.prod_dir,
         threads=args.threads,
         skip_download=args.skip_download,
         skip_optimize=args.skip_optimize,
         quiet=args.quiet,
-        verbose=args.verbose
+        verbose=args.verbose,
+        whitelist_config=args.whitelist_config,
+        skip_whitelist=args.skip_whitelist,
+        skip_delete=args.skip_delete
     )
     
     try:
