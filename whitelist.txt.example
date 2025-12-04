@@ -1,0 +1,69 @@
+# Whitelist Configuration Example
+# ================================
+# This file demonstrates the three types of domain matching supported:
+# 1. Exact domain matching
+# 2. Wildcard matching (using *)
+# 3. Regex matching (enclosed in /.../)
+#
+# Comments are supported (lines starting with #)
+# Inline comments are also supported
+
+# ============================================================================
+# EXACT DOMAIN MATCHING
+# ============================================================================
+# These will match the exact domain specified
+# With subdomain matching enabled (default), these also match all subdomains
+
+example.com           # Matches example.com and sub.example.com (with subdomain matching)
+google-analytics.com  # Matches analytics domains
+facebook.com
+twitter.com
+
+# ============================================================================
+# WILDCARD MATCHING
+# ============================================================================
+# Use * as a wildcard to match any characters
+# These are converted to regex patterns internally
+
+*.tracking.com        # Matches any.tracking.com, sub.any.tracking.com, etc.
+*.analytics.*         # Matches sub.analytics.com, sub.analytics.net, etc.
+*telemetry*           # Matches anytelemetrysite.com, mytelemetry.net, etc.
+ads.*                 # Matches ads.example.com, ads.anywhere.net, etc.
+
+# ============================================================================
+# REGEX MATCHING
+# ============================================================================
+# Advanced patterns using regular expressions
+# Enclose the pattern in /.../ (like /pattern/)
+
+/.*\.ad[sz]\..*$/          # Matches domains with .ads. or .adz. anywhere
+/^track.*\.com$/           # Matches tracking1.com, tracker.com, etc.
+/.*analytics[0-9]+\..*$/   # Matches analytics1.com, analytics99.net, etc.
+/.*\.(doubleclick|google-analytics)\..*$/  # Matches multiple patterns
+
+# ============================================================================
+# COMMON USE CASES
+# ============================================================================
+
+# Allow specific CDNs
+# (Uncomment to use)
+# cdn.example.com
+# static.example.com
+
+# Allow specific ad networks that you trust
+# ads.yournetwork.com
+
+# Allow specific tracking domains (for your own analytics)
+# myanalytics.example.com
+# tracker.mysite.com
+
+# ============================================================================
+# TIPS
+# ============================================================================
+# 1. Start with exact matches for simplicity
+# 2. Use wildcards for broad patterns
+# 3. Use regex only when wildcards aren't sufficient
+# 4. Test your patterns with --whitelist-report to see what's being matched
+# 5. With subdomain matching disabled (--no-whitelist-subdomain),
+#    only exact domains are matched
+# 6. Regex patterns are more powerful but slower - use sparingly

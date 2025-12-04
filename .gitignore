@@ -1,3 +1,7 @@
-venv/
+.venv/
 pihole_blocklists/
 pihole_blocklists_prod/
+download_progress.json
+pihole_downloader.log
+whitelist.txt
+blocklists.conf

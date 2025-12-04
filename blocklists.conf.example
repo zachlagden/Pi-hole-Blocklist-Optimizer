@@ -1,0 +1,25 @@
+# Pi-hole Blocklist Configuration
+# Format: url|name|category
+# Categories: advertising, tracking, malicious, suspicious, nsfw, comprehensive
+# Lines starting with # are comments and will be ignored
+# Disabled entries start with #DISABLED: and will be skipped
+
+# Comprehensive Blocklists
+https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts|stevenblack_unified|comprehensive
+
+# Advertising Blocklists
+https://adaway.org/hosts.txt|adaway|advertising
+
+# Tracking Blocklists
+https://v.firebog.net/hosts/Easyprivacy.txt|easyprivacy|tracking
+
+# Suspicious Blocklists
+https://raw.githubusercontent.com/PolishFiltersTeam/KADhosts/master/KADhosts.txt|polish_kad_hosts|suspicious
+
+# Malicious Blocklists
+https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Alternate%20versions%20Anti-Malware%20List/AntiMalwareHosts.txt|dandelion_antimalware|malicious
+
+# NSFW Blocklists
+https://nsfw.oisd.nl|oisd_nsfw|nsfw
+
+# Add new categories or lists here
