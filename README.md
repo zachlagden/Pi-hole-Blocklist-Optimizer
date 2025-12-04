@@ -4,322 +4,255 @@
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/zachlagden/Pi-hole-Blocklist-Optimizer?style=flat-square)
 ![GitHub](https://img.shields.io/github/license/zachlagden/Pi-hole-Blocklist-Optimizer?style=flat-square)
-![Python Version](https://img.shields.io/badge/python-3.6%2B-blue?style=flat-square)
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey?style=flat-square)
 ![Stars](https://img.shields.io/github/stars/zachlagden/Pi-hole-Blocklist-Optimizer?style=flat-square)
-[![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=flat-square)](https://github.com/zachlagden/Pi-hole-Blocklist-Optimizer/graphs/commit-activity)
 
-**A powerful and efficient tool for downloading, optimizing, and organizing blocklists for [Pi-hole](https://pi-hole.net/)**
+**A powerful tool for downloading, optimizing, and organizing blocklists for [Pi-hole](https://pi-hole.net/)**
 
-[Key Features](#-key-features) •
+[Features](#-features) •
 [Installation](#-installation) •
 [Quick Start](#-quick-start) •
-[Configuration](#️-configuration) •
-[Usage](#️-usage) •
-[Documentation](https://github.com/zachlagden/Pi-hole-Blocklist-Optimizer/wiki) •
-[Contributing](#-contributing)
+[Whitelist](#-whitelist-support) •
+[Configuration](#%EF%B8%8F-configuration) •
+[Usage](#%EF%B8%8F-usage)
 
 </div>
 
-## 📋 Table of Contents
+## What Does This Tool Do?
 
-- [What Does This Tool Do?](#-what-does-this-tool-do)
-- [Key Features](#-key-features)
-- [System Requirements](#-system-requirements)
-- [Installation](#-installation)
-- [Quick Start](#-quick-start)
-- [Configuration](#️-configuration)
-- [Usage](#️-usage)
-- [Output Directory Structure](#-output-directory-structure)
-- [Using with Pi-hole](#-using-with-pi-hole)
-- [Performance Notes](#-performance-notes)
-- [Screenshots](#-screenshots)
-- [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Acknowledgements](#-acknowledgements)
+1. **Downloads** blocklists from multiple sources (multi-threaded)
+2. **Validates** domains and removes invalid entries
+3. **Optimizes** by removing duplicates across all lists
+4. **Filters** domains using your whitelist (exact, wildcard, regex)
+5. **Organizes** into categories (advertising, tracking, malicious, etc.)
+6. **Combines** into production-ready lists
 
-## 🔍 What Does This Tool Do?
+## Features
 
-This tool helps you maintain comprehensive blocklists for Pi-hole by:
+- **Multi-threaded downloads** - Fast parallel downloading (configurable 1-16 threads)
+- **Whitelist support** - Filter domains with exact matches, wildcards, or regex patterns
+- **Incremental updates** - Only re-download changed lists (ETag/Last-Modified support)
+- **Multi-format support** - Handles hosts, AdBlock, and plain domain formats
+- **Progress tracking** - Resume interrupted downloads
+- **Detailed reporting** - Statistics and whitelist match reports
+- **Error recovery** - Automatic retry with exponential backoff
 
-1. **Downloading** blocklists from multiple sources
-2. **Optimizing** them by removing duplicates and invalid entries
-3. **Organizing** them into categories (advertising, tracking, malicious, etc.)
-4. **Combining** them into ready-to-use production lists
+## Installation
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/zachlagden/Pi-hole-Blocklist-Optimizer/assets/workflow.png" alt="Pi-hole Blocklist Optimizer Workflow" width="600">
-</div>
+### Requirements
 
-## ✨ Key Features
+- Python 3.8+
+- `requests` and `tqdm` packages
 
-- **External Configuration**: Blocklists are defined in an external configuration file for easy management
-- **Multi-Format Support**: Handles all common blocklist formats:
-  - Standard hosts format (`0.0.0.0 domain.com`)
-  - AdBlock syntax (`||domain.com^`)
-  - Plain domain lists
-- **Intelligent Processing**:
-  - Preserves the original format of well-structured lists
-  - Retains valuable metadata (title, version, modification date)
-  - Maintains logical grouping from source lists
-- **Quality Control**:
-  - Validates all entries as proper domains
-  - Removes duplicate domains across all lists
-- **Performance Optimized**:
-  - Multi-threaded downloading for faster operation
-  - Efficient memory usage even with millions of domains
-- **Production-Ready Output**:
-  - Creates optimized combined lists for each category
-  - Generates a master list of all unique domains
-- **Detailed Reporting**:
-  - Provides comprehensive statistics about downloaded lists
-  - Tracks successful and failed downloads
-- **Error Recovery**:
-  - Automatically comments out failed lists in the configuration file
-  - Continues processing despite individual list failures
-
-## 💻 System Requirements
-
-- Python 3.6 or higher
-- Required Python packages (automatically installed by the wrapper scripts):
-  - requests
-  - tqdm
-
-## 📥 Installation
-
-### Option 1: Direct Download
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/zachlagden/Pi-hole-Blocklist-Optimizer
-cd Pi-hole-Blocklist-Optimizer
-```
-
-2. Make the scripts executable (Linux/macOS only):
-
-```bash
-chmod +x pihole_download.sh
-```
-
-### Option 2: Manual Installation
-
-1. Download or copy these files:
-   - `pihole_downloader.py` (Main Python script)
-   - `pihole_download.sh` (Linux/macOS wrapper script)
-   - `pihole_download.bat` (Windows wrapper script)
-   - `blocklists.conf` (Configuration file)
-   
-2. Ensure you have Python 3.6+ installed
-   
-3. Install the required dependencies:
-
-```bash
-pip install requests tqdm
-```
-
-## 🚀 Quick Start
-
-**Linux/macOS:**
-```bash
-./pihole_download.sh
-```
-
-**Windows:**
-```
-pihole_download.bat
-```
-
-That's it! The script will:
-1. Create necessary directories
-2. Download blocklists from the configuration file
-3. Optimize and categorize them
-4. Create production-ready lists in `pihole_blocklists_prod/`
-
-## ⚙️ Configuration
-
-The blocklists are defined in `blocklists.conf`. Each line has this format:
-
-```
-url|name|category
-```
-
-For example:
-
-```
-https://adaway.org/hosts.txt|adaway|advertising
-```
-
-Where:
-- **url**: The URL of the blocklist
-- **name**: A descriptive name (used for the filename)
-- **category**: The category of the blocklist (advertising, tracking, malicious, etc.)
-
-Lines starting with `#` are comments and will be ignored. Lists that failed to download will be automatically commented out with `#DISABLED:`.
-
-### Customizing Categories
-
-The default configuration includes these categories:
-- `advertising`: Ad networks and services
-- `tracking`: User tracking and analytics
-- `malicious`: Malware, phishing, and scam sites
-- `suspicious`: Potentially unwanted content
-- `nsfw`: Adult content
-- `comprehensive`: Multi-category lists
-
-You can add your own categories by simply using them in the configuration file.
-
-## 🛠️ Usage
-
-### Basic Usage
-
-**Linux/macOS:**
-```bash
-./pihole_download.sh
-```
-
-**Windows:**
-```
-pihole_download.bat
-```
-
-### Advanced Options
-
-You can run the Python script directly with additional options:
-
-```bash
-python3 pihole_downloader.py --threads 8 --verbose
-```
-
-### Command Line Arguments
-
-```
-usage: pihole_downloader.py [-h] [-c CONFIG] [-b BASE_DIR] [-p PROD_DIR] [-t THREADS] [--skip-download] [--skip-optimize] [-v] [-q]
-
-Pi-hole Blocklist Downloader and Optimizer
-
-options:
-  -h, --help            show this help message and exit
-  -c CONFIG, --config CONFIG
-                        Configuration file (default: blocklists.conf)
-  -b BASE_DIR, --base-dir BASE_DIR
-                        Base directory for raw and optimized lists (default: pihole_blocklists)
-  -p PROD_DIR, --prod-dir PROD_DIR
-                        Production directory for combined lists (default: pihole_blocklists_prod)
-  -t THREADS, --threads THREADS
-                        Number of download threads (default: 4)
-  --skip-download       Skip downloading files (use existing files)
-  --skip-optimize       Skip optimization (just download)
-  -v, --verbose         Enable verbose logging
-  -q, --quiet           Suppress all output except errors
-```
-
-## 📁 Output Directory Structure
-
-The tool creates the following directory structure:
-
-```
-pihole_blocklists/
-├── advertising/      # Individual advertising blocklists
-├── tracking/         # Individual tracking blocklists
-├── malicious/        # Individual malicious/security blocklists
-├── suspicious/       # Individual suspicious blocklists
-├── nsfw/             # Individual NSFW blocklists
-└── comprehensive/    # Individual comprehensive blocklists
-pihole_blocklists_prod/
-├── all_domains.txt   # Combined list of all unique domains
-├── advertising.txt   # Combined advertising domains
-├── tracking.txt      # Combined tracking domains
-├── malicious.txt     # Combined malicious domains
-├── suspicious.txt    # Combined suspicious domains
-└── nsfw.txt          # Combined NSFW domains
-```
-
-## 🔄 Using with Pi-hole
-
-The optimized lists in `pihole_blocklists_prod/` are ready to be used with Pi-hole. You can:
-
-### Option 1: Use Remote Lists (Recommended)
-
-Host the files on a web server and add the URLs to Pi-hole's blocklist settings.
-
-### Option 2: Use Local Files
-
-Copy the files to Pi-hole's custom list directory:
-
-```bash
-# On your Pi-hole device
-sudo cp pihole_blocklists_prod/*.txt /etc/pihole/
-sudo pihole restartdns
-```
-
-### Option 3: Create Your Own Curated Lists
-
-Use these files as a reference to create your own specialized blocklists based on your needs.
-
-## ⚡ Performance Notes
-
-- The default configuration includes ~50 blocklists with over 6 million unique domains
-- Processing all lists typically takes 60-90 seconds on modern hardware
-- Memory usage scales with the number of domains (expect ~1GB for full processing)
-- For low-memory systems, consider processing fewer lists or categories
-
-## 📸 Screenshots
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/zachlagden/Pi-hole-Blocklist-Optimizer/assets/screenshot1.png" alt="Pi-hole Blocklist Optimizer Screenshot" width="600">
-</div>
-
-## 🔧 Troubleshooting
-
-### Common Issues and Solutions
-
-| Issue | Solution |
-|-------|----------|
-| **Connection Errors** | Check your internet connection and proxy settings |
-| **Memory Errors** | Reduce the number of lists or increase available memory |
-| **Permission Errors** | Ensure you have write permissions in the script directory |
-| **Python Errors** | Make sure you have Python 3.6+ and required packages installed |
-
-### Detailed Logs
-Check `pihole_downloader.log` for detailed information about any errors.
-
-### Failed Lists
-Lists that fail to download will be commented out in the configuration file with `#DISABLED:` prefix.
-
-### Statistics
-Review `pihole_blocklists/blocklist_stats.txt` for detailed statistics and error information.
-
-## 👥 Contributing
-
-Contributions are welcome! Here's how you can help:
-
-1. **Report bugs or suggest features** by opening an issue
-2. **Fix bugs or implement features** by submitting a pull request
-3. **Improve documentation** by submitting updates to the README or other docs
-4. **Share the project** with others who might find it useful
-
-### Development Setup
+### Setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/zachlagden/Pi-hole-Blocklist-Optimizer
 cd Pi-hole-Blocklist-Optimizer
 
-# Set up a virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
 # Install dependencies
 pip install requests tqdm
 ```
 
-## 📜 License
+## Quick Start
 
-This project is licensed under the Unlicense - see the [UNLICENCE](UNLICENCE) file for details. This means you are free to use, modify, distribute, and do whatever you want with this software with no restrictions.
+```bash
+python pihole_downloader.py
+```
 
-## 🙏 Acknowledgements
+That's it! The script will:
+1. Download blocklists from `blocklists.conf`
+2. Validate and optimize domains
+3. Apply whitelist filtering
+4. Create production lists in `pihole_blocklists_prod/`
 
-- This tool builds upon the great work of various blocklist maintainers listed in the configuration file
-- Special thanks to the Pi-hole team for creating such a useful ad-blocking tool
+## Whitelist Support
+
+Create a `whitelist.txt` file to exclude domains from the final output. Three matching types are supported:
+
+### Exact Domains
+```
+example.com           # Matches example.com and *.example.com (subdomains)
+google.com
+```
+
+### Wildcard Patterns
+```
+*.tracking.com        # Matches any.tracking.com
+ads.*                 # Matches ads.example.com, ads.site.net
+*analytics*           # Matches myanalytics.com, analytics.site.net
+```
+
+### Regex Patterns
+```
+/^track.*\.com$/      # Matches tracker.com, tracking.com
+/.*\.ads\..*$/        # Matches sub.ads.example.com
+```
+
+### Example whitelist.txt
+```
+# Exact domains (with subdomain matching)
+github.com
+googleapis.com
+
+# Wildcards
+*.cdn.example.com
+*cloudfront*
+
+# Regex patterns
+/^api\..*\.com$/
+```
+
+Run with `--whitelist-report` to see which domains were filtered and by which patterns.
+
+## Configuration
+
+### blocklists.conf
+
+Define blocklist sources in `blocklists.conf`:
+
+```
+url|name|category
+```
+
+Example:
+```
+https://adaway.org/hosts.txt|adaway|advertising
+https://someonewhocares.org/hosts/hosts|someonewhocares|comprehensive
+```
+
+Categories: `advertising`, `tracking`, `malicious`, `suspicious`, `nsfw`, `comprehensive`
+
+Lines starting with `#` are ignored. Failed lists are auto-commented with `#DISABLED:`.
+
+## Usage
+
+### Basic
+
+```bash
+python pihole_downloader.py
+```
+
+### With Options
+
+```bash
+# Fast download with 8 threads and whitelist report
+python pihole_downloader.py -t 8 --whitelist-report
+
+# Custom config and output directory
+python pihole_downloader.py -c myconfig.conf -p /var/blocklists
+
+# Verbose logging
+python pihole_downloader.py -v
+```
+
+### All Options
+
+```
+usage: pihole_downloader.py [-h] [-c CONFIG] [-w WHITELIST] [-b BASE_DIR]
+                            [-p PROD_DIR] [-t THREADS] [--timeout TIMEOUT]
+                            [--skip-download] [--skip-optimize] [--no-incremental]
+                            [--dry-run] [--no-whitelist-subdomain]
+                            [--whitelist-report] [-v] [-q] [--version]
+
+Options:
+  -c, --config FILE         Configuration file (default: blocklists.conf)
+  -w, --whitelist FILE      Whitelist file (default: whitelist.txt)
+  -b, --base-dir DIR        Base directory for lists (default: pihole_blocklists)
+  -p, --prod-dir DIR        Production directory (default: pihole_blocklists_prod)
+  -t, --threads N           Download threads 1-16 (default: 4)
+  --timeout SECONDS         HTTP timeout (default: 30)
+  --skip-download           Skip downloading (use existing files)
+  --skip-optimize           Skip optimization
+  --no-incremental          Force re-download all lists
+  --dry-run                 Show what would be done without doing it
+  --no-whitelist-subdomain  Disable subdomain matching in whitelist
+  --whitelist-report        Generate detailed whitelist match report
+  -v, --verbose             Verbose logging
+  -q, --quiet               Suppress output except errors
+  --version                 Show version
+```
+
+## Output Structure
+
+```
+pihole_blocklists/              # Individual optimized lists
+├── advertising/
+├── tracking/
+├── malicious/
+├── suspicious/
+├── nsfw/
+└── comprehensive/
+
+pihole_blocklists_prod/         # Combined production lists
+├── all_domains.txt             # All unique domains
+├── advertising.txt
+├── tracking.txt
+├── malicious.txt
+├── suspicious.txt
+├── nsfw.txt
+├── comprehensive.txt
+└── whitelist_report.txt        # (if --whitelist-report used)
+```
+
+## Using with Pi-hole
+
+### Option 1: Use Pre-built Lists (Recommended)
+
+Use the companion repository [Pi-hole-Optimized-Blocklists](https://github.com/zachlagden/Pi-hole-Optimized-Blocklists) which runs this optimizer weekly and hosts the results.
+
+Add these URLs to Pi-hole's Adlists:
+```
+https://media.githubusercontent.com/media/zachlagden/Pi-hole-Optimized-Blocklists/main/lists/all_domains.txt
+```
+
+### Option 2: Self-Host
+
+Run the optimizer and host the files on your own server, then add the URLs to Pi-hole.
+
+### Option 3: Local Files
+
+```bash
+sudo cp pihole_blocklists_prod/*.txt /etc/pihole/
+pihole -g
+```
+
+## Performance
+
+- Default config: ~50 blocklists, 6M+ unique domains
+- Processing time: 60-120 seconds (depends on network and threads)
+- Memory: ~500MB-1GB for full processing
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Connection errors | Check internet, try fewer threads (`-t 2`) |
+| Memory errors | Process fewer lists or increase swap |
+| Slow downloads | Increase threads (`-t 8`) |
+| Missing domains | Check whitelist isn't too broad |
+
+Check `pihole_downloader.log` for detailed error information.
+
+## Contributing
+
+Contributions welcome! Open an issue or submit a PR.
+
+```bash
+git clone https://github.com/zachlagden/Pi-hole-Blocklist-Optimizer
+cd Pi-hole-Blocklist-Optimizer
+python -m venv venv
+source venv/bin/activate
+pip install requests tqdm
+```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENCE](LICENCE) file for details.
+
+## Acknowledgements
+
+- Blocklist maintainers listed in the configuration file
+- [Pi-hole](https://pi-hole.net/) team
