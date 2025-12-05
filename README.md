@@ -10,12 +10,12 @@
 
 **A powerful tool for downloading, optimizing, and organizing blocklists for [Pi-hole](https://pi-hole.net/)**
 
-[Features](#-features) •
-[Installation](#-installation) •
-[Quick Start](#-quick-start) •
-[Whitelist](#-whitelist-support) •
-[Configuration](#%EF%B8%8F-configuration) •
-[Usage](#%EF%B8%8F-usage)
+[Features](#features) •
+[Installation](#installation) •
+[Quick Start](#quick-start) •
+[Whitelist](#whitelist-support) •
+[Configuration](#configuration) •
+[Usage](#usage)
 
 </div>
 
