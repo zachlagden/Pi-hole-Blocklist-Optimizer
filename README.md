@@ -187,12 +187,12 @@ pihole_blocklists/              # Individual optimized lists
 └── comprehensive/
 
 pihole_blocklists_prod/         # Combined production lists
-├── all_domains.txt             # All unique domains
+├── all_domains.txt             # All unique domains (excludes NSFW)
 ├── advertising.txt
 ├── tracking.txt
 ├── malicious.txt
 ├── suspicious.txt
-├── nsfw.txt
+├── nsfw.txt                    # Separate - not included in all_domains.txt
 ├── comprehensive.txt
 └── whitelist_report.txt        # (if --whitelist-report used)
 ```

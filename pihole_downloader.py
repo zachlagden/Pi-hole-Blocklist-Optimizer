@@ -746,7 +746,9 @@ class BlocklistManager:
         category_domains: Dict[str, Set[str]] = {category: set() for category in self.categories}
 
         for name, stats in self.domain_stats.items():
-            all_domains.update(stats.domains)
+            # NSFW category is kept separate and not included in all_domains
+            if stats.category != 'nsfw':
+                all_domains.update(stats.domains)
             category_domains[stats.category].update(stats.domains)
 
         self.stats['unique_domains'] = len(all_domains)
