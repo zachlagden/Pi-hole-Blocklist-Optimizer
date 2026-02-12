@@ -1,7 +1,13 @@
-.venv/
+# Rust
+target/
+Cargo.lock
+
+# Runtime output
 pihole_blocklists/
 pihole_blocklists_prod/
 download_progress.json
 pihole_downloader.log
+
+# User config (not examples)
 whitelist.txt
 blocklists.conf

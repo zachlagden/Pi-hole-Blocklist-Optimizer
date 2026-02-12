@@ -8,14 +8,12 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey?style=flat-square)
 ![Stars](https://img.shields.io/github/stars/zachlagden/Pi-hole-Blocklist-Optimizer?style=flat-square)
 
-**A powerful tool for downloading, optimizing, and organizing blocklists for [Pi-hole](https://pi-hole.net/)**
+**A powerful tool for downloading, optimizing, and organizing blocklists for
+[Pi-hole](https://pi-hole.net/)**
 
-[Features](#features) •
-[Installation](#installation) •
-[Quick Start](#quick-start) •
-[Whitelist](#whitelist-support) •
-[Configuration](#configuration) •
-[Usage](#usage)
+[Features](#features) • [Installation](#installation) •
+[Quick Start](#quick-start) • [Whitelist](#whitelist-support) •
+[Configuration](#configuration) • [Usage](#usage)
 
 </div>
 
@@ -30,9 +28,12 @@
 
 ## Features
 
-- **Multi-threaded downloads** - Fast parallel downloading (configurable 1-16 threads)
-- **Whitelist support** - Filter domains with exact matches, wildcards, or regex patterns
-- **Incremental updates** - Only re-download changed lists (ETag/Last-Modified support)
+- **Multi-threaded downloads** - Fast parallel downloading (configurable 1-16
+  threads)
+- **Whitelist support** - Filter domains with exact matches, wildcards, or regex
+  patterns
+- **Incremental updates** - Only re-download changed lists (ETag/Last-Modified
+  support)
 - **Multi-format support** - Handles hosts, AdBlock, and plain domain formats
 - **Progress tracking** - Resume interrupted downloads
 - **Detailed reporting** - Statistics and whitelist match reports
@@ -63,6 +64,7 @@ python pihole_downloader.py
 ```
 
 That's it! The script will:
+
 1. Download blocklists from `blocklists.conf`
 2. Validate and optimize domains
 3. Apply whitelist filtering
@@ -70,15 +72,18 @@ That's it! The script will:
 
 ## Whitelist Support
 
-Create a `whitelist.txt` file to exclude domains from the final output. Three matching types are supported:
+Create a `whitelist.txt` file to exclude domains from the final output. Three
+matching types are supported:
 
 ### Exact Domains
+
 ```
 example.com           # Matches example.com and *.example.com (subdomains)
 google.com
 ```
 
 ### Wildcard Patterns
+
 ```
 *.tracking.com        # Matches any.tracking.com
 ads.*                 # Matches ads.example.com, ads.site.net
@@ -86,12 +91,14 @@ ads.*                 # Matches ads.example.com, ads.site.net
 ```
 
 ### Regex Patterns
+
 ```
 /^track.*\.com$/      # Matches tracker.com, tracking.com
 /.*\.ads\..*$/        # Matches sub.ads.example.com
 ```
 
 ### Example whitelist.txt
+
 ```
 # Exact domains (with subdomain matching)
 github.com
@@ -105,7 +112,8 @@ googleapis.com
 /^api\..*\.com$/
 ```
 
-Run with `--whitelist-report` to see which domains were filtered and by which patterns.
+Run with `--whitelist-report` to see which domains were filtered and by which
+patterns.
 
 ## Configuration
 
@@ -118,14 +126,17 @@ url|name|category
 ```
 
 Example:
+
 ```
 https://adaway.org/hosts.txt|adaway|advertising
 https://someonewhocares.org/hosts/hosts|someonewhocares|comprehensive
 ```
 
-Categories: `advertising`, `tracking`, `malicious`, `suspicious`, `nsfw`, `comprehensive`
+Categories: `advertising`, `tracking`, `malicious`, `suspicious`, `nsfw`,
+`comprehensive`
 
-Lines starting with `#` are ignored. Failed lists are auto-commented with `#DISABLED:`.
+Lines starting with `#` are ignored. Failed lists are auto-commented with
+`#DISABLED:`.
 
 ## Usage
 
@@ -201,16 +212,20 @@ pihole_blocklists_prod/         # Combined production lists
 
 ### Option 1: Use Pre-built Lists (Recommended)
 
-Use the companion repository [Pi-hole-Optimized-Blocklists](https://github.com/zachlagden/Pi-hole-Optimized-Blocklists) which runs this optimizer weekly and hosts the results.
+Use the companion repository
+[Pi-hole-Optimized-Blocklists](https://github.com/zachlagden/Pi-hole-Optimized-Blocklists)
+which runs this optimizer weekly and hosts the results.
 
 Add these URLs to Pi-hole's Adlists:
+
 ```
 https://media.githubusercontent.com/media/zachlagden/Pi-hole-Optimized-Blocklists/main/lists/all_domains.txt
 ```
 
 ### Option 2: Self-Host
 
-Run the optimizer and host the files on your own server, then add the URLs to Pi-hole.
+Run the optimizer and host the files on your own server, then add the URLs to
+Pi-hole.
 
 ### Option 3: Local Files
 
@@ -227,12 +242,12 @@ pihole -g
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
+| Issue             | Solution                                   |
+| ----------------- | ------------------------------------------ |
 | Connection errors | Check internet, try fewer threads (`-t 2`) |
-| Memory errors | Process fewer lists or increase swap |
-| Slow downloads | Increase threads (`-t 8`) |
-| Missing domains | Check whitelist isn't too broad |
+| Memory errors     | Process fewer lists or increase swap       |
+| Slow downloads    | Increase threads (`-t 8`)                  |
+| Missing domains   | Check whitelist isn't too broad            |
 
 Check `pihole_downloader.log` for detailed error information.
 
@@ -250,7 +265,8 @@ pip install requests tqdm
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENCE](LICENCE) file for details.
+This project is licensed under the MIT License - see the [LICENCE](LICENCE) file
+for details.
 
 ## Acknowledgements
 
