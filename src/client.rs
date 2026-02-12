@@ -103,9 +103,7 @@ impl HttpClient {
                     if attempts < MAX_RETRIES {
                         attempts += 1;
                         let delay = RETRY_BACKOFF_MS * 2u64.pow(attempts - 1);
-                        debug!(
-                            "Retry {attempts}/{MAX_RETRIES} for {url} ({e}), waiting {delay}ms"
-                        );
+                        debug!("Retry {attempts}/{MAX_RETRIES} for {url} ({e}), waiting {delay}ms");
                         tokio::time::sleep(Duration::from_millis(delay)).await;
                     } else {
                         return Err(e.into());

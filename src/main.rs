@@ -12,7 +12,9 @@ use std::process;
 #[derive(Parser)]
 #[command(name = "pihole-optimizer")]
 #[command(version = "3.0.0")]
-#[command(about = "Pi-hole Blocklist Optimizer v3.0 — Downloads, optimizes, and organizes Pi-hole blocklists")]
+#[command(
+    about = "Pi-hole Blocklist Optimizer v3.0 — Downloads, optimizes, and organizes Pi-hole blocklists"
+)]
 struct Cli {
     /// Configuration file path
     #[arg(short, long, default_value = "blocklists.conf")]

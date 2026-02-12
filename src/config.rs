@@ -32,10 +32,7 @@ pub struct Blocklist {
     pub last_modified: Option<String>,
 }
 
-pub fn load_blocklists(
-    config_file: &str,
-    progress: &ProgressTracker,
-) -> Result<Vec<Blocklist>> {
+pub fn load_blocklists(config_file: &str, progress: &ProgressTracker) -> Result<Vec<Blocklist>> {
     let path = Path::new(config_file);
     if !path.exists() {
         bail!("Configuration file '{config_file}' not found");

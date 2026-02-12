@@ -24,8 +24,7 @@ impl BlocklistManager {
     pub fn new(config: AppConfig) -> Result<Self> {
         let http_client = HttpClient::new(config.timeout)?;
         let progress = ProgressTracker::load();
-        let whitelist =
-            WhitelistManager::load(&config.whitelist_file, config.whitelist_subdomain);
+        let whitelist = WhitelistManager::load(&config.whitelist_file, config.whitelist_subdomain);
 
         Ok(Self {
             config,
@@ -39,8 +38,7 @@ impl BlocklistManager {
         let start = Instant::now();
 
         let blocklists = load_blocklists(&self.config.config_file, &self.progress)?;
-        let categories: HashSet<String> =
-            blocklists.iter().map(|b| b.category.clone()).collect();
+        let categories: HashSet<String> = blocklists.iter().map(|b| b.category.clone()).collect();
         let total_lists = blocklists.len();
 
         if self.config.dry_run {
@@ -67,11 +65,7 @@ impl BlocklistManager {
                 if path.exists() {
                     match load_domains_from_file(&path) {
                         Ok(domains) => {
-                            debug!(
-                                "  {}: {} domains (from file)",
-                                bl.name,
-                                domains.len()
-                            );
+                            debug!("  {}: {} domains (from file)", bl.name, domains.len());
                             category_domains
                                 .entry(bl.category.clone())
                                 .or_default()
@@ -173,24 +167,16 @@ impl BlocklistManager {
                         }
 
                         // Save raw file
-                        let cat_dir =
-                            Path::new(&self.config.base_dir).join(&bl.category);
+                        let cat_dir = Path::new(&self.config.base_dir).join(&bl.category);
                         let raw_path = cat_dir.join(format!("{}.txt.raw", bl.name));
                         if let Err(e) = std::fs::write(&raw_path, &content) {
-                            warn!(
-                                "Failed to write raw file for {}: {e}",
-                                bl.name
-                            );
+                            warn!("Failed to write raw file for {}: {e}", bl.name);
                         }
 
                         // Save optimized file
                         let opt_path = cat_dir.join(format!("{}.txt", bl.name));
-                        if let Err(e) = write_blocklist_file(&opt_path, &domains, None)
-                        {
-                            warn!(
-                                "Failed to write optimized file for {}: {e}",
-                                bl.name
-                            );
+                        if let Err(e) = write_blocklist_file(&opt_path, &domains, None) {
+                            warn!("Failed to write optimized file for {}: {e}", bl.name);
                         }
 
                         // Update progress tracker
@@ -253,10 +239,7 @@ impl BlocklistManager {
                 println!("Whitelisted:        {}", format_num(whitelisted));
                 println!("Final count:        {}", format_num(final_domains));
             }
-            println!(
-                "Runtime:            {:.2} seconds",
-                elapsed.as_secs_f64()
-            );
+            println!("Runtime:            {:.2} seconds", elapsed.as_secs_f64());
             println!("{}", "=".repeat(60));
             println!();
         }
@@ -303,8 +286,7 @@ impl BlocklistManager {
         for (cat, domains) in category_domains {
             if !domains.is_empty() {
                 let (cat_filtered, _) = self.whitelist.filter_domains(domains);
-                let cat_path =
-                    Path::new(&self.config.prod_dir).join(format!("{cat}.txt"));
+                let cat_path = Path::new(&self.config.prod_dir).join(format!("{cat}.txt"));
                 let label = capitalize(cat);
                 write_blocklist_file(&cat_path, &cat_filtered, Some(&label))?;
                 info!(
@@ -316,10 +298,8 @@ impl BlocklistManager {
 
         // Whitelist report
         if self.config.whitelist_report && removed > 0 {
-            let removed_set: HashSet<String> =
-                all_domains.difference(&filtered).cloned().collect();
-            let report_path =
-                Path::new(&self.config.prod_dir).join("whitelist_report.txt");
+            let removed_set: HashSet<String> = all_domains.difference(&filtered).cloned().collect();
+            let report_path = Path::new(&self.config.prod_dir).join("whitelist_report.txt");
             self.whitelist.generate_report(
                 report_path
                     .to_str()
@@ -346,16 +326,12 @@ fn process_content(content: &[u8]) -> HashSet<String> {
 }
 
 fn load_domains_from_file(path: &Path) -> Result<HashSet<String>> {
-    let content = std::fs::read(path)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
+    let content =
+        std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?;
     Ok(process_content(&content))
 }
 
-fn write_blocklist_file(
-    path: &Path,
-    domains: &HashSet<String>,
-    label: Option<&str>,
-) -> Result<()> {
+fn write_blocklist_file(path: &Path, domains: &HashSet<String>, label: Option<&str>) -> Result<()> {
     let mut sorted: Vec<&String> = domains.iter().collect();
     sorted.sort();
 

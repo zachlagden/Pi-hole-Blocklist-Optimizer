@@ -58,10 +58,7 @@ impl WhitelistManager {
                         regex_count += 1;
                     }
                     Err(e) => {
-                        warn!(
-                            "Invalid regex on line {}: {pattern} - {e}",
-                            line_num + 1
-                        );
+                        warn!("Invalid regex on line {}: {pattern} - {e}", line_num + 1);
                     }
                 }
                 continue;
@@ -69,20 +66,14 @@ impl WhitelistManager {
 
             // Wildcard pattern: contains *
             if line.contains('*') {
-                let regex_pattern = format!(
-                    "^{}$",
-                    line.replace('.', r"\.").replace('*', ".*")
-                );
+                let regex_pattern = format!("^{}$", line.replace('.', r"\.").replace('*', ".*"));
                 match Regex::new(&regex_pattern) {
                     Ok(_) => {
                         all_patterns.push(format!("(?:{regex_pattern})"));
                         wildcard_count += 1;
                     }
                     Err(e) => {
-                        warn!(
-                            "Invalid wildcard on line {}: {line} - {e}",
-                            line_num + 1
-                        );
+                        warn!("Invalid wildcard on line {}: {line} - {e}", line_num + 1);
                     }
                 }
                 continue;
@@ -128,13 +119,8 @@ impl WhitelistManager {
         false
     }
 
-    pub fn filter_domains(
-        &self,
-        domains: &HashSet<String>,
-    ) -> (HashSet<String>, usize) {
-        if self.exact_domains.is_empty()
-            && self.combined_pattern.is_none()
-        {
+    pub fn filter_domains(&self, domains: &HashSet<String>) -> (HashSet<String>, usize) {
+        if self.exact_domains.is_empty() && self.combined_pattern.is_none() {
             return (domains.clone(), 0);
         }
 

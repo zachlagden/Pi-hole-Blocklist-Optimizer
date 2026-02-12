@@ -10,17 +10,13 @@ static DOMAIN_RE: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
-static ADBLOCK_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\|\|(.+?)\^(?:\$.*)?$").unwrap()
-});
+static ADBLOCK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\|\|(.+?)\^(?:\$.*)?$").unwrap());
 
-static IP_DOMAIN_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s+(\S+)$").unwrap()
-});
+static IP_DOMAIN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s*\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s+(\S+)$").unwrap());
 
-static COMMENT_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[#!].*$").unwrap()
-});
+static COMMENT_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[#!].*$").unwrap());
 
 pub fn validate_domain(domain: &str) -> bool {
     if domain.is_empty() || domain == "localhost" || domain.ends_with(".local") {
