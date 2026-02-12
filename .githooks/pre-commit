@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -e
+
+echo "Running pre-commit checks..."
+
+# Rust formatting
+if command -v cargo &>/dev/null; then
+    echo "  Checking Rust formatting..."
+    cargo fmt --check
+else
+    echo "  WARNING: cargo not found, skipping Rust format check"
+fi
+
+# Prettier for non-Rust files
+if command -v npx &>/dev/null; then
+    echo "  Checking Prettier formatting..."
+    npx --yes prettier --check '**/*.{yml,yaml,md,json}' 2>/dev/null
+else
+    echo "  WARNING: npx not found, skipping Prettier check"
+fi
+
+echo "All checks passed."
