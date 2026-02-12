@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            asset: pihole-optimizer-linux-x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            asset: pihole-optimizer-linux-aarch64
+            use_cross: true
+          - target: x86_64-apple-darwin
+            os: macos-13
+            asset: pihole-optimizer-macos-x86_64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            asset: pihole-optimizer-macos-aarch64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build (cross)
+        if: matrix.use_cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build (native)
+        if: ${{ !matrix.use_cross }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package binary
+        run: |
+          cp "target/${{ matrix.target }}/release/pihole-optimizer" "${{ matrix.asset }}"
+          chmod +x "${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG_NAME" \
+            --title "$TAG_NAME" \
+            --generate-notes \
+            artifacts/pihole-optimizer-linux-x86_64/pihole-optimizer-linux-x86_64 \
+            artifacts/pihole-optimizer-linux-aarch64/pihole-optimizer-linux-aarch64 \
+            artifacts/pihole-optimizer-macos-x86_64/pihole-optimizer-macos-x86_64 \
+            artifacts/pihole-optimizer-macos-aarch64/pihole-optimizer-macos-aarch64
