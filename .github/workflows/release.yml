@@ -20,11 +20,14 @@ jobs:
             asset: pihole-optimizer-linux-aarch64
             use_cross: true
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-latest
             asset: pihole-optimizer-macos-x86_64
           - target: aarch64-apple-darwin
             os: macos-latest
             asset: pihole-optimizer-macos-aarch64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            asset: pihole-optimizer-windows-x86_64.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -47,10 +50,16 @@ jobs:
         if: ${{ !matrix.use_cross }}
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Package binary
+      - name: Package binary (unix)
+        if: runner.os != 'Windows'
         run: |
           cp "target/${{ matrix.target }}/release/pihole-optimizer" "${{ matrix.asset }}"
           chmod +x "${{ matrix.asset }}"
+
+      - name: Package binary (windows)
+        if: runner.os == 'Windows'
+        run: |
+          cp "target/${{ matrix.target }}/release/pihole-optimizer.exe" "${{ matrix.asset }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -81,4 +90,5 @@ jobs:
             artifacts/pihole-optimizer-linux-x86_64/pihole-optimizer-linux-x86_64 \
             artifacts/pihole-optimizer-linux-aarch64/pihole-optimizer-linux-aarch64 \
             artifacts/pihole-optimizer-macos-x86_64/pihole-optimizer-macos-x86_64 \
-            artifacts/pihole-optimizer-macos-aarch64/pihole-optimizer-macos-aarch64
+            artifacts/pihole-optimizer-macos-aarch64/pihole-optimizer-macos-aarch64 \
+            artifacts/pihole-optimizer-windows-x86_64.exe/pihole-optimizer-windows-x86_64.exe
