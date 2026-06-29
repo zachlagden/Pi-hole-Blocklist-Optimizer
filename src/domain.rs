@@ -37,7 +37,40 @@ pub fn normalize_domain(domain: &str) -> String {
     domain.to_lowercase().trim_end_matches('.').to_string()
 }
 
-pub fn extract_domain_from_line(line: &str) -> Option<String> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Entry {
+    Exact(String),
+    Wildcard(String),
+}
+
+impl Entry {
+    pub fn to_key(&self) -> String {
+        match self {
+            Entry::Exact(d) => d.clone(),
+            Entry::Wildcard(d) => format!("||{d}^"),
+        }
+    }
+}
+
+fn make_exact(domain: &str) -> Option<Entry> {
+    let d = normalize_domain(domain);
+    if !d.contains('*') && validate_domain(&d) {
+        Some(Entry::Exact(d))
+    } else {
+        None
+    }
+}
+
+fn make_wildcard(domain: &str) -> Option<Entry> {
+    let d = normalize_domain(domain);
+    if !d.contains('*') && validate_domain(&d) {
+        Some(Entry::Wildcard(d))
+    } else {
+        None
+    }
+}
+
+pub fn extract_entry(line: &str, allow_wildcards: bool) -> Option<Entry> {
     let line = line.trim();
     if line.is_empty() || line.starts_with('#') || line.starts_with('!') {
         return None;
@@ -49,19 +82,29 @@ pub fn extract_domain_from_line(line: &str) -> Option<String> {
         return None;
     }
 
-    // IP-domain format: 0.0.0.0 domain.com or 127.0.0.1 domain.com
     if let Some(caps) = IP_DOMAIN_RE.captures(line) {
-        return caps.get(1).map(|m| m.as_str().to_string());
+        return make_exact(caps.get(1)?.as_str());
     }
 
-    // AdBlock format: ||domain.com^ or ||domain.com^$third-party
     if let Some(caps) = ADBLOCK_RE.captures(line) {
-        return caps.get(1).map(|m| m.as_str().to_string());
+        let domain = caps.get(1)?.as_str();
+        return if allow_wildcards {
+            make_wildcard(domain)
+        } else {
+            make_exact(domain)
+        };
     }
 
-    // Plain domain: no spaces, slashes, or question marks
+    if let Some(stripped) = line.strip_prefix("*.") {
+        return if allow_wildcards {
+            make_wildcard(stripped)
+        } else {
+            make_exact(stripped)
+        };
+    }
+
     if !line.contains(' ') && !line.contains('/') && !line.contains('?') {
-        return Some(line.to_string());
+        return make_exact(line);
     }
 
     None
@@ -101,44 +144,67 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_ip_domain() {
+    fn test_extract_entry_hosts_and_plain() {
         assert_eq!(
-            extract_domain_from_line("0.0.0.0 ads.example.com"),
-            Some("ads.example.com".to_string())
+            extract_entry("0.0.0.0 ads.example.com", true),
+            Some(Entry::Exact("ads.example.com".to_string()))
         );
         assert_eq!(
-            extract_domain_from_line("127.0.0.1 tracker.com"),
-            Some("tracker.com".to_string())
-        );
-    }
-
-    #[test]
-    fn test_extract_adblock() {
-        assert_eq!(
-            extract_domain_from_line("||ads.example.com^"),
-            Some("ads.example.com".to_string())
-        );
-        assert_eq!(
-            extract_domain_from_line("||tracker.com^$third-party"),
-            Some("tracker.com".to_string())
+            extract_entry("ads.example.com", false),
+            Some(Entry::Exact("ads.example.com".to_string()))
         );
     }
 
     #[test]
-    fn test_extract_plain_domain() {
+    fn test_extract_entry_abp_respects_flag() {
         assert_eq!(
-            extract_domain_from_line("ads.example.com"),
-            Some("ads.example.com".to_string())
+            extract_entry("||foo.com^", true),
+            Some(Entry::Wildcard("foo.com".to_string()))
+        );
+        assert_eq!(
+            extract_entry("||foo.com^", false),
+            Some(Entry::Exact("foo.com".to_string()))
+        );
+        assert_eq!(
+            extract_entry("||tracker.com^$third-party", true),
+            Some(Entry::Wildcard("tracker.com".to_string()))
         );
     }
 
     #[test]
-    fn test_extract_comments() {
-        assert_eq!(extract_domain_from_line("# comment"), None);
-        assert_eq!(extract_domain_from_line("! comment"), None);
+    fn test_extract_entry_star_sugar_respects_flag() {
         assert_eq!(
-            extract_domain_from_line("ads.example.com # inline comment"),
-            Some("ads.example.com".to_string())
+            extract_entry("*.bar.com", true),
+            Some(Entry::Wildcard("bar.com".to_string()))
+        );
+        assert_eq!(
+            extract_entry("*.bar.com", false),
+            Some(Entry::Exact("bar.com".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_extract_entry_rejects_junk() {
+        assert_eq!(extract_entry("# comment", true), None);
+        assert_eq!(extract_entry("", true), None);
+        assert_eq!(extract_entry("||*.^", true), None);
+        assert_eq!(extract_entry("*.", true), None);
+    }
+
+    #[test]
+    fn test_extract_entry_inline_comment() {
+        assert_eq!(
+            extract_entry("ads.example.com # inline comment", true),
+            Some(Entry::Exact("ads.example.com".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_entry_to_key() {
+        assert_eq!(Entry::Exact("foo.com".to_string()).to_key(), "foo.com");
+        assert_eq!(
+            Entry::Wildcard("foo.com".to_string()).to_key(),
+            "||foo.com^"
         );
     }
 
