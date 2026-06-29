@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use crate::client::HttpClient;
 use crate::config::{load_blocklists, AppConfig};
-use crate::domain::{extract_domain_from_line, format_num, normalize_domain, validate_domain};
+use crate::domain::{extract_entry, format_num};
 use crate::progress::ProgressTracker;
 use crate::whitelist::WhitelistManager;
 
@@ -63,7 +63,7 @@ impl BlocklistManager {
                     .join(&bl.category)
                     .join(format!("{}.txt", bl.name));
                 if path.exists() {
-                    match load_domains_from_file(&path) {
+                    match load_domains_from_file(&path, bl.allow_wildcards) {
                         Ok(domains) => {
                             debug!("  {}: {} domains (from file)", bl.name, domains.len());
                             category_domains
@@ -149,7 +149,7 @@ impl BlocklistManager {
                             .join(&bl.category)
                             .join(format!("{}.txt", bl.name));
                         if path.exists() {
-                            if let Ok(domains) = load_domains_from_file(&path) {
+                            if let Ok(domains) = load_domains_from_file(&path, bl.allow_wildcards) {
                                 category_domains
                                     .entry(bl.category.clone())
                                     .or_default()
@@ -159,7 +159,7 @@ impl BlocklistManager {
                     }
                     Ok(dl) => {
                         let content = dl.content.expect("modified response must have content");
-                        let domains = process_content(&content);
+                        let domains = process_content(&content, bl.allow_wildcards);
                         let count = domains.len();
 
                         if count == 0 {
@@ -312,23 +312,21 @@ impl BlocklistManager {
     }
 }
 
-fn process_content(content: &[u8]) -> HashSet<String> {
+fn process_content(content: &[u8], allow_wildcards: bool) -> HashSet<String> {
     let text = String::from_utf8_lossy(content);
     let mut domains = HashSet::new();
     for line in text.lines() {
-        if let Some(domain) = extract_domain_from_line(line) {
-            if validate_domain(&domain) {
-                domains.insert(normalize_domain(&domain));
-            }
+        if let Some(entry) = extract_entry(line, allow_wildcards) {
+            domains.insert(entry.to_key());
         }
     }
     domains
 }
 
-fn load_domains_from_file(path: &Path) -> Result<HashSet<String>> {
+fn load_domains_from_file(path: &Path, allow_wildcards: bool) -> Result<HashSet<String>> {
     let content =
         std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?;
-    Ok(process_content(&content))
+    Ok(process_content(&content, allow_wildcards))
 }
 
 fn write_blocklist_file(path: &Path, domains: &HashSet<String>, label: Option<&str>) -> Result<()> {
@@ -348,10 +346,18 @@ fn write_blocklist_file(path: &Path, domains: &HashSet<String>, label: Option<&s
     writeln!(w)?;
 
     for domain in sorted {
-        writeln!(w, "0.0.0.0 {domain}")?;
+        writeln!(w, "{}", format_blocklist_line(domain))?;
     }
 
     Ok(())
+}
+
+fn format_blocklist_line(key: &str) -> String {
+    if key.starts_with("||") {
+        key.to_string()
+    } else {
+        format!("0.0.0.0 {key}")
+    }
 }
 
 fn capitalize(s: &str) -> String {
@@ -359,5 +365,32 @@ fn capitalize(s: &str) -> String {
     match chars.next() {
         None => String::new(),
         Some(first) => first.to_uppercase().to_string() + chars.as_str(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn process_content_emits_wildcards_when_enabled() {
+        let set = process_content(b"||foo.com^\n*.bar.com\n0.0.0.0 baz.com\n", true);
+        assert!(set.contains("||foo.com^"));
+        assert!(set.contains("||bar.com^"));
+        assert!(set.contains("baz.com"));
+    }
+
+    #[test]
+    fn process_content_flattens_when_disabled() {
+        let set = process_content(b"||foo.com^\n*.bar.com\n", false);
+        assert!(set.contains("foo.com"));
+        assert!(set.contains("bar.com"));
+        assert!(!set.iter().any(|d| d.contains('*') || d.starts_with("||")));
+    }
+
+    #[test]
+    fn format_blocklist_line_handles_both_forms() {
+        assert_eq!(format_blocklist_line("foo.com"), "0.0.0.0 foo.com");
+        assert_eq!(format_blocklist_line("||foo.com^"), "||foo.com^");
     }
 }

@@ -28,7 +28,6 @@ pub struct Blocklist {
     pub url: String,
     pub name: String,
     pub category: String,
-    #[allow(dead_code)]
     pub allow_wildcards: bool,
     pub etag: Option<String>,
     pub last_modified: Option<String>,
