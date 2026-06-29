@@ -11,9 +11,9 @@ use std::process;
 
 #[derive(Parser)]
 #[command(name = "pihole-optimizer")]
-#[command(version = "3.0.0")]
+#[command(version)]
 #[command(
-    about = "Pi-hole Blocklist Optimizer v3.0 — Downloads, optimizes, and organizes Pi-hole blocklists"
+    about = "Pi-hole Blocklist Optimizer v3.1 — Downloads, optimizes, and organizes Pi-hole blocklists"
 )]
 struct Cli {
     /// Configuration file path

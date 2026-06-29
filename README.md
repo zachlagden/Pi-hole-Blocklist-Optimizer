@@ -135,7 +135,7 @@ patterns.
 Define blocklist sources in `blocklists.conf`:
 
 ```
-url|name|category
+url|name|category[|flags]
 ```
 
 Example:
@@ -143,10 +143,17 @@ Example:
 ```
 https://adaway.org/hosts.txt|adaway|advertising
 https://someonewhocares.org/hosts/hosts|someonewhocares|comprehensive
+https://raw.githubusercontent.com/you/lists/main/custom.txt|custom|malicious|abp
 ```
 
 Categories: `advertising`, `tracking`, `malicious`, `suspicious`, `nsfw`,
 `comprehensive`
+
+Optional `flags` (4th field): `abp` enables ABP-style wildcard entries for that
+source. On an `abp` source, the lines `||domain^` and `*.domain` block the domain
+and all its subdomains (emitted as `||domain^` in the output); without the flag,
+those forms flatten to an exact domain. Use only on trusted, curated sources.
+ABP-style entries require Pi-hole Core ≥ 5.16 / FTL ≥ 5.22 (released 2023).
 
 Lines starting with `#` are ignored.
 
