@@ -199,11 +199,20 @@ Options:
       --dry-run                Show what would happen without doing it
       --no-whitelist-subdomain Disable subdomain matching in whitelist
       --whitelist-report       Generate detailed whitelist match report
+      --abp-lists <CATEGORIES> Also emit ABP-style variants (e.g. nsfw) that block subdomains
   -v, --verbose                Debug logging
   -q, --quiet                  Errors only
   -h, --help                   Print help
   -V, --version                Print version
 ```
+
+`--abp-lists` takes a comma-separated list of categories (e.g. `--abp-lists nsfw`). For
+each, the optimizer writes an additional `<category>_abp.txt` in the production directory
+where every entry is in ABP form (`||domain^`) so it blocks the domain **and all its
+subdomains**. The normal `<category>.txt` (exact-host) is still written unchanged. ABP
+entries require Pi-hole Core ≥ 5.16 / FTL ≥ 5.22, and are more aggressive — use for
+categories of dedicated domains (like NSFW) rather than lists that contain shared,
+multi-tenant hosts.
 
 ## Output Structure
 

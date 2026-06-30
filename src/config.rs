@@ -21,6 +21,7 @@ pub struct AppConfig {
     pub verbose: bool,
     pub whitelist_subdomain: bool,
     pub whitelist_report: bool,
+    pub abp_lists: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
