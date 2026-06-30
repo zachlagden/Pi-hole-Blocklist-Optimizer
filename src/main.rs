@@ -13,7 +13,7 @@ use std::process;
 #[command(name = "pihole-optimizer")]
 #[command(version)]
 #[command(
-    about = "Pi-hole Blocklist Optimizer v3.1 — Downloads, optimizes, and organizes Pi-hole blocklists"
+    about = "Pi-hole Blocklist Optimizer — Downloads, optimizes, and organizes Pi-hole blocklists"
 )]
 struct Cli {
     /// Configuration file path
@@ -63,6 +63,10 @@ struct Cli {
     /// Generate detailed whitelist match report
     #[arg(long)]
     whitelist_report: bool,
+
+    /// Categories to also emit as an ABP-style variant (e.g. nsfw) that blocks subdomains
+    #[arg(long, value_delimiter = ',')]
+    abp_lists: Vec<String>,
 
     /// Verbose logging (debug level)
     #[arg(short, long)]
@@ -114,12 +118,16 @@ async fn main() {
         verbose: cli.verbose,
         whitelist_subdomain: !cli.no_whitelist_subdomain,
         whitelist_report: cli.whitelist_report,
+        abp_lists: cli.abp_lists,
     };
 
     if !config.quiet {
         println!();
         println!("{}", "=".repeat(60));
-        println!("{:>35}", "PI-HOLE BLOCKLIST OPTIMIZER v3.0");
+        println!(
+            "{:>35}",
+            format!("PI-HOLE BLOCKLIST OPTIMIZER v{}", env!("CARGO_PKG_VERSION"))
+        );
         println!("{}", "=".repeat(60));
         println!();
     }

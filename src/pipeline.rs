@@ -175,7 +175,7 @@ impl BlocklistManager {
 
                         // Save optimized file
                         let opt_path = cat_dir.join(format!("{}.txt", bl.name));
-                        if let Err(e) = write_blocklist_file(&opt_path, &domains, None) {
+                        if let Err(e) = write_blocklist_file(&opt_path, &domains, None, false) {
                             warn!("Failed to write optimized file for {}: {e}", bl.name);
                         }
 
@@ -276,7 +276,7 @@ impl BlocklistManager {
 
         // Write master file
         let master_path = Path::new(&self.config.prod_dir).join("all_domains.txt");
-        write_blocklist_file(&master_path, &filtered, Some("Master"))?;
+        write_blocklist_file(&master_path, &filtered, Some("Master"), false)?;
         info!(
             "Created Master blocklist: {} domains",
             format_num(filtered.len())
@@ -288,11 +288,26 @@ impl BlocklistManager {
                 let (cat_filtered, _) = self.whitelist.filter_domains(domains);
                 let cat_path = Path::new(&self.config.prod_dir).join(format!("{cat}.txt"));
                 let label = capitalize(cat);
-                write_blocklist_file(&cat_path, &cat_filtered, Some(&label))?;
+                write_blocklist_file(&cat_path, &cat_filtered, Some(&label), false)?;
                 info!(
                     "Created {label} blocklist: {} domains",
                     format_num(cat_filtered.len())
                 );
+
+                if self
+                    .config
+                    .abp_lists
+                    .iter()
+                    .any(|c| c.eq_ignore_ascii_case(cat))
+                {
+                    let abp_path = Path::new(&self.config.prod_dir).join(format!("{cat}_abp.txt"));
+                    let abp_label = format!("{label} (ABP)");
+                    write_blocklist_file(&abp_path, &cat_filtered, Some(&abp_label), true)?;
+                    info!(
+                        "Created {abp_label} blocklist: {} entries",
+                        format_num(cat_filtered.len())
+                    );
+                }
             }
         }
 
@@ -329,7 +344,12 @@ fn load_domains_from_file(path: &Path, allow_wildcards: bool) -> Result<HashSet<
     Ok(process_content(&content, allow_wildcards))
 }
 
-fn write_blocklist_file(path: &Path, domains: &HashSet<String>, label: Option<&str>) -> Result<()> {
+fn write_blocklist_file(
+    path: &Path,
+    domains: &HashSet<String>,
+    label: Option<&str>,
+    force_abp: bool,
+) -> Result<()> {
     let mut sorted: Vec<&String> = domains.iter().collect();
     sorted.sort();
 
@@ -346,7 +366,12 @@ fn write_blocklist_file(path: &Path, domains: &HashSet<String>, label: Option<&s
     writeln!(w)?;
 
     for domain in sorted {
-        writeln!(w, "{}", format_blocklist_line(domain))?;
+        let line = if force_abp {
+            format_abp_line(domain)
+        } else {
+            format_blocklist_line(domain)
+        };
+        writeln!(w, "{line}")?;
     }
 
     Ok(())
@@ -357,6 +382,14 @@ fn format_blocklist_line(key: &str) -> String {
         key.to_string()
     } else {
         format!("0.0.0.0 {key}")
+    }
+}
+
+fn format_abp_line(key: &str) -> String {
+    if key.starts_with("||") {
+        key.to_string()
+    } else {
+        format!("||{key}^")
     }
 }
 
@@ -392,5 +425,12 @@ mod tests {
     fn format_blocklist_line_handles_both_forms() {
         assert_eq!(format_blocklist_line("foo.com"), "0.0.0.0 foo.com");
         assert_eq!(format_blocklist_line("||foo.com^"), "||foo.com^");
+    }
+
+    #[test]
+    fn format_abp_line_wraps_exact_and_keeps_wildcards() {
+        assert_eq!(format_abp_line("foo.com"), "||foo.com^");
+        assert_eq!(format_abp_line("sub.foo.com"), "||sub.foo.com^");
+        assert_eq!(format_abp_line("||foo.com^"), "||foo.com^");
     }
 }
