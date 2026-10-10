@@ -128,6 +128,12 @@ googleapis.com
 Run with `--whitelist-report` to see which domains were filtered and by which
 patterns.
 
+Whitelist entries match ABP rules by their domain, so `example.com` removes
+`||example.com^` and, with subdomain matching, `||ads.example.com^`. A whitelist
+entry for a subdomain does not remove a rule for its parent. For example,
+`ads.example.com` leaves `||example.com^` in place, and that rule still blocks
+`ads.example.com`. Use Pi-hole's own allowlist for that case.
+
 ## Configuration
 
 ### blocklists.conf
@@ -154,6 +160,15 @@ source. On an `abp` source, the lines `||domain^` and `*.domain` block the domai
 and all its subdomains (emitted as `||domain^` in the output); without the flag,
 those forms flatten to an exact domain. Use only on trusted, curated sources.
 ABP-style entries require Pi-hole Core ≥ 5.16 / FTL ≥ 5.22 (released 2023).
+
+Production lists leave out any entry that a `||domain^` rule in the same list
+already covers. If a list has `||example.com^`, the entries `example.com`,
+`ads.example.com` and `||cdn.example.com^` are dropped, because the rule already
+blocks them.
+
+After adding or removing the `abp` flag on a source, run once with
+`--no-incremental`. Otherwise an unchanged source is rebuilt from the cached file
+that was written under the old setting.
 
 Lines starting with `#` are ignored.
 
@@ -209,10 +224,21 @@ Options:
 `--abp-lists` takes a comma-separated list of categories (e.g. `--abp-lists nsfw`). For
 each, the optimizer writes an additional `<category>_abp.txt` in the production directory
 where every entry is in ABP form (`||domain^`) so it blocks the domain **and all its
-subdomains**. The normal `<category>.txt` (exact-host) is still written unchanged. ABP
-entries require Pi-hole Core ≥ 5.16 / FTL ≥ 5.22, and are more aggressive — use for
-categories of dedicated domains (like NSFW) rather than lists that contain shared,
+subdomains**. Subdomains of a domain already in the file are left out, so the ABP file
+is usually much shorter than the normal one. The normal `<category>.txt` is still
+written.
+
+In Pi-hole, add `<category>_abp.txt` **instead of** `<category>.txt`, not alongside it.
+The ABP file blocks everything the normal file blocks, so enabling both stores every
+domain twice and blocks nothing extra.
+
+ABP entries require Pi-hole Core ≥ 5.16 / FTL ≥ 5.22, and are more aggressive. Use them
+for categories of dedicated domains (like NSFW) rather than lists that contain shared,
 multi-tenant hosts.
+
+`--skip-download` rebuilds the production lists from the per-source files already in the
+base directory, without using the network. Use it to try different flags. Scheduled runs
+don't need it, because a normal run only downloads sources that have changed.
 
 ## Output Structure
 
