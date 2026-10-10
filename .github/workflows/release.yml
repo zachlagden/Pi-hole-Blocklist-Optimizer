@@ -79,6 +79,12 @@ jobs:
         with:
           path: artifacts
 
+      - name: Write checksums
+        working-directory: artifacts
+        run: |
+          sha256sum */* | sed -E 's#  [^/]+/#  #' > SHA256SUMS
+          cat SHA256SUMS
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -91,4 +97,5 @@ jobs:
             artifacts/pihole-optimizer-linux-aarch64/pihole-optimizer-linux-aarch64 \
             artifacts/pihole-optimizer-macos-x86_64/pihole-optimizer-macos-x86_64 \
             artifacts/pihole-optimizer-macos-aarch64/pihole-optimizer-macos-aarch64 \
-            artifacts/pihole-optimizer-windows-x86_64.exe/pihole-optimizer-windows-x86_64.exe
+            artifacts/pihole-optimizer-windows-x86_64.exe/pihole-optimizer-windows-x86_64.exe \
+            artifacts/SHA256SUMS
