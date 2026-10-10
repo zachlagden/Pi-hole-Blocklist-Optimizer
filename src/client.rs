@@ -8,7 +8,7 @@ use std::time::Duration;
 const MAX_RETRIES: u32 = 3;
 const RETRY_BACKOFF_MS: u64 = 500;
 const RETRY_STATUS_CODES: &[u16] = &[429, 500, 502, 503, 504];
-const USER_AGENT: &str = "Pi-hole Blocklist Optimizer/3.0";
+const USER_AGENT: &str = concat!("Pi-hole Blocklist Optimizer/", env!("CARGO_PKG_VERSION"));
 
 #[derive(Clone)]
 pub struct HttpClient {
