@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::collections::HashSet;
 use std::sync::LazyLock;
 
 const MAX_DOMAIN_LENGTH: usize = 253;
@@ -50,6 +51,60 @@ impl Entry {
             Entry::Wildcard(d) => format!("||{d}^"),
         }
     }
+
+    pub fn from_key(key: &str) -> Entry {
+        if is_wildcard_key(key) {
+            Entry::Wildcard(key_domain(key).to_string())
+        } else {
+            Entry::Exact(key.to_string())
+        }
+    }
+
+    pub fn to_line(&self) -> String {
+        match self {
+            Entry::Exact(d) => format!("0.0.0.0 {d}"),
+            Entry::Wildcard(d) => format!("||{d}^"),
+        }
+    }
+}
+
+fn is_wildcard_key(key: &str) -> bool {
+    key.starts_with("||") && key.ends_with('^')
+}
+
+pub fn key_domain(key: &str) -> &str {
+    key.strip_prefix("||")
+        .and_then(|k| k.strip_suffix('^'))
+        .unwrap_or(key)
+}
+
+fn parent_domains(domain: &str) -> impl Iterator<Item = &str> {
+    domain
+        .match_indices('.')
+        .map(move |(i, _)| &domain[i + 1..])
+}
+
+pub fn collapse_entries(keys: &HashSet<String>, all_wildcard: bool) -> Vec<Entry> {
+    let is_wildcard = |key: &str| all_wildcard || is_wildcard_key(key);
+    let wildcards: HashSet<&str> = keys
+        .iter()
+        .filter(|k| is_wildcard(k))
+        .map(|k| key_domain(k))
+        .collect();
+    let covered = |domain: &str| parent_domains(domain).any(|p| wildcards.contains(p));
+
+    let mut entries: Vec<Entry> = wildcards
+        .iter()
+        .filter(|d| !covered(d))
+        .map(|d| Entry::Wildcard(d.to_string()))
+        .collect();
+    entries.extend(
+        keys.iter()
+            .filter(|k| !is_wildcard(k))
+            .filter(|d| !wildcards.contains(d.as_str()) && !covered(d))
+            .map(|d| Entry::Exact(d.clone())),
+    );
+    entries
 }
 
 fn make_exact(domain: &str) -> Option<Entry> {
@@ -205,6 +260,95 @@ mod tests {
         assert_eq!(
             Entry::Wildcard("foo.com".to_string()).to_key(),
             "||foo.com^"
+        );
+    }
+
+    #[test]
+    fn test_entry_from_key_and_to_line() {
+        assert_eq!(
+            Entry::from_key("foo.com"),
+            Entry::Exact("foo.com".to_string())
+        );
+        assert_eq!(
+            Entry::from_key("||foo.com^"),
+            Entry::Wildcard("foo.com".to_string())
+        );
+        assert_eq!(Entry::from_key("foo.com").to_line(), "0.0.0.0 foo.com");
+        assert_eq!(Entry::from_key("||foo.com^").to_line(), "||foo.com^");
+    }
+
+    #[test]
+    fn test_key_domain() {
+        assert_eq!(key_domain("foo.com"), "foo.com");
+        assert_eq!(key_domain("||foo.com^"), "foo.com");
+    }
+
+    fn keys(items: &[&str]) -> HashSet<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    fn sorted_lines(entries: Vec<Entry>) -> Vec<String> {
+        let mut lines: Vec<String> = entries.iter().map(Entry::to_line).collect();
+        lines.sort();
+        lines
+    }
+
+    #[test]
+    fn test_collapse_abp_output_has_no_duplicates() {
+        let entries = collapse_entries(&keys(&["foo.com", "||foo.com^"]), true);
+        assert_eq!(sorted_lines(entries), vec!["||foo.com^"]);
+    }
+
+    #[test]
+    fn test_collapse_abp_output_drops_covered_subdomains() {
+        let entries = collapse_entries(
+            &keys(&[
+                "example.com",
+                "ads.example.com",
+                "a.b.example.com",
+                "other.com",
+            ]),
+            true,
+        );
+        assert_eq!(
+            sorted_lines(entries),
+            vec!["||example.com^", "||other.com^"]
+        );
+    }
+
+    #[test]
+    fn test_collapse_drops_exact_entries_covered_by_wildcards() {
+        let entries = collapse_entries(
+            &keys(&[
+                "||example.com^",
+                "example.com",
+                "ads.example.com",
+                "||cdn.example.com^",
+                "other.com",
+            ]),
+            false,
+        );
+        assert_eq!(
+            sorted_lines(entries),
+            vec!["0.0.0.0 other.com", "||example.com^"]
+        );
+    }
+
+    #[test]
+    fn test_collapse_keeps_exact_subdomains_without_wildcard_parent() {
+        let entries = collapse_entries(&keys(&["example.com", "ads.example.com"]), false);
+        assert_eq!(
+            sorted_lines(entries),
+            vec!["0.0.0.0 ads.example.com", "0.0.0.0 example.com"]
+        );
+    }
+
+    #[test]
+    fn test_collapse_does_not_match_partial_labels() {
+        let entries = collapse_entries(&keys(&["||example.com^", "badexample.com"]), false);
+        assert_eq!(
+            sorted_lines(entries),
+            vec!["0.0.0.0 badexample.com", "||example.com^"]
         );
     }
 

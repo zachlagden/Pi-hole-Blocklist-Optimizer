@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use crate::client::HttpClient;
 use crate::config::{load_blocklists, AppConfig};
-use crate::domain::{extract_entry, format_num};
+use crate::domain::{collapse_entries, extract_entry, format_num, Entry};
 use crate::progress::ProgressTracker;
 use crate::whitelist::WhitelistManager;
 
@@ -175,7 +175,9 @@ impl BlocklistManager {
 
                         // Save optimized file
                         let opt_path = cat_dir.join(format!("{}.txt", bl.name));
-                        if let Err(e) = write_blocklist_file(&opt_path, &domains, None, false) {
+                        let entries: Vec<Entry> =
+                            domains.iter().map(|k| Entry::from_key(k)).collect();
+                        if let Err(e) = write_blocklist_file(&opt_path, &entries, None) {
                             warn!("Failed to write optimized file for {}: {e}", bl.name);
                         }
 
@@ -276,10 +278,11 @@ impl BlocklistManager {
 
         // Write master file
         let master_path = Path::new(&self.config.prod_dir).join("all_domains.txt");
-        write_blocklist_file(&master_path, &filtered, Some("Master"), false)?;
+        let master_entries = collapse_entries(&filtered, false);
+        write_blocklist_file(&master_path, &master_entries, Some("Master"))?;
         info!(
             "Created Master blocklist: {} domains",
-            format_num(filtered.len())
+            format_num(master_entries.len())
         );
 
         // Write per-category files
@@ -288,10 +291,11 @@ impl BlocklistManager {
                 let (cat_filtered, _) = self.whitelist.filter_domains(domains);
                 let cat_path = Path::new(&self.config.prod_dir).join(format!("{cat}.txt"));
                 let label = capitalize(cat);
-                write_blocklist_file(&cat_path, &cat_filtered, Some(&label), false)?;
+                let cat_entries = collapse_entries(&cat_filtered, false);
+                write_blocklist_file(&cat_path, &cat_entries, Some(&label))?;
                 info!(
                     "Created {label} blocklist: {} domains",
-                    format_num(cat_filtered.len())
+                    format_num(cat_entries.len())
                 );
 
                 if self
@@ -302,10 +306,11 @@ impl BlocklistManager {
                 {
                     let abp_path = Path::new(&self.config.prod_dir).join(format!("{cat}_abp.txt"));
                     let abp_label = format!("{label} (ABP)");
-                    write_blocklist_file(&abp_path, &cat_filtered, Some(&abp_label), true)?;
+                    let abp_entries = collapse_entries(&cat_filtered, true);
+                    write_blocklist_file(&abp_path, &abp_entries, Some(&abp_label))?;
                     info!(
                         "Created {abp_label} blocklist: {} entries",
-                        format_num(cat_filtered.len())
+                        format_num(abp_entries.len())
                     );
                 }
             }
@@ -323,7 +328,7 @@ impl BlocklistManager {
             )?;
         }
 
-        Ok((removed, filtered.len()))
+        Ok((removed, master_entries.len()))
     }
 }
 
@@ -344,14 +349,9 @@ fn load_domains_from_file(path: &Path, allow_wildcards: bool) -> Result<HashSet<
     Ok(process_content(&content, allow_wildcards))
 }
 
-fn write_blocklist_file(
-    path: &Path,
-    domains: &HashSet<String>,
-    label: Option<&str>,
-    force_abp: bool,
-) -> Result<()> {
-    let mut sorted: Vec<&String> = domains.iter().collect();
-    sorted.sort();
+fn write_blocklist_file(path: &Path, entries: &[Entry], label: Option<&str>) -> Result<()> {
+    let mut lines: Vec<String> = entries.iter().map(Entry::to_line).collect();
+    lines.sort_unstable();
 
     let file = std::fs::File::create(path)
         .with_context(|| format!("Failed to create {}", path.display()))?;
@@ -362,35 +362,14 @@ fn write_blocklist_file(
 
     writeln!(w, "# Pi-hole {label} Blocklist")?;
     writeln!(w, "# Last updated: {now}")?;
-    writeln!(w, "# Total domains: {}", sorted.len())?;
+    writeln!(w, "# Total domains: {}", lines.len())?;
     writeln!(w)?;
 
-    for domain in sorted {
-        let line = if force_abp {
-            format_abp_line(domain)
-        } else {
-            format_blocklist_line(domain)
-        };
+    for line in lines {
         writeln!(w, "{line}")?;
     }
 
     Ok(())
-}
-
-fn format_blocklist_line(key: &str) -> String {
-    if key.starts_with("||") {
-        key.to_string()
-    } else {
-        format!("0.0.0.0 {key}")
-    }
-}
-
-fn format_abp_line(key: &str) -> String {
-    if key.starts_with("||") {
-        key.to_string()
-    } else {
-        format!("||{key}^")
-    }
 }
 
 fn capitalize(s: &str) -> String {
@@ -422,15 +401,25 @@ mod tests {
     }
 
     #[test]
-    fn format_blocklist_line_handles_both_forms() {
-        assert_eq!(format_blocklist_line("foo.com"), "0.0.0.0 foo.com");
-        assert_eq!(format_blocklist_line("||foo.com^"), "||foo.com^");
-    }
+    fn write_blocklist_file_counts_written_lines() {
+        let dir =
+            std::env::temp_dir().join(format!("pihole-optimizer-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("out.txt");
+        let keys: HashSet<String> = ["foo.com", "||foo.com^", "ads.foo.com", "bar.com"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
 
-    #[test]
-    fn format_abp_line_wraps_exact_and_keeps_wildcards() {
-        assert_eq!(format_abp_line("foo.com"), "||foo.com^");
-        assert_eq!(format_abp_line("sub.foo.com"), "||sub.foo.com^");
-        assert_eq!(format_abp_line("||foo.com^"), "||foo.com^");
+        write_blocklist_file(&path, &collapse_entries(&keys, true), None).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        let body: Vec<&str> = content
+            .lines()
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .collect();
+        assert_eq!(body, vec!["||bar.com^", "||foo.com^"]);
+        assert!(content.contains("# Total domains: 2"));
     }
 }
