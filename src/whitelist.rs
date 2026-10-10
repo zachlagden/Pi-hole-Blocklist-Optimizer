@@ -4,7 +4,7 @@ use regex::Regex;
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::domain::{normalize_domain, validate_domain};
+use crate::domain::{key_domain, normalize_domain, validate_domain};
 
 pub struct WhitelistManager {
     exact_domains: HashSet<String>,
@@ -127,11 +127,12 @@ impl WhitelistManager {
         let mut filtered = HashSet::with_capacity(domains.len());
         let mut removed = 0usize;
 
-        for domain in domains {
+        for key in domains {
+            let domain = key_domain(key);
             let mut matched = false;
 
             // Exact match (O(1) set lookup)
-            if self.exact_domains.contains(domain.as_str()) {
+            if self.exact_domains.contains(domain) {
                 matched = true;
             }
 
@@ -150,7 +151,7 @@ impl WhitelistManager {
             if matched {
                 removed += 1;
             } else {
-                filtered.insert(domain.clone());
+                filtered.insert(key.clone());
             }
         }
 
@@ -188,13 +189,14 @@ impl WhitelistManager {
         let mut subdomain = Vec::new();
         let mut pattern = Vec::new();
 
-        for domain in removed_domains {
-            if self.exact_domains.contains(domain.as_str()) {
-                exact.push(domain.as_str());
+        for key in removed_domains {
+            let domain = key_domain(key);
+            if self.exact_domains.contains(domain) {
+                exact.push(key.as_str());
             } else if self.enable_subdomain && self.check_subdomain(domain) {
-                subdomain.push(domain.as_str());
+                subdomain.push(key.as_str());
             } else {
-                pattern.push(domain.as_str());
+                pattern.push(key.as_str());
             }
         }
 
@@ -237,5 +239,51 @@ impl WhitelistManager {
 
         info!("Whitelist report saved to: {output_file}");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manager(exact: &[&str], pattern: Option<&str>, enable_subdomain: bool) -> WhitelistManager {
+        WhitelistManager {
+            exact_domains: exact.iter().map(|s| s.to_string()).collect(),
+            combined_pattern: pattern.map(|p| Regex::new(p).unwrap()),
+            enable_subdomain,
+        }
+    }
+
+    fn keys(items: &[&str]) -> HashSet<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn exact_entries_match_abp_rules() {
+        let wl = manager(&["example.com"], None, true);
+        let (filtered, removed) = wl.filter_domains(&keys(&[
+            "||example.com^",
+            "||ads.example.com^",
+            "||other.com^",
+        ]));
+        assert_eq!(removed, 2);
+        assert_eq!(filtered, keys(&["||other.com^"]));
+    }
+
+    #[test]
+    fn patterns_match_abp_rules_by_domain() {
+        let wl = manager(&[], Some("^ads\\..*$"), true);
+        let (filtered, removed) = wl.filter_domains(&keys(&["||ads.example.com^", "foo.com"]));
+        assert_eq!(removed, 1);
+        assert_eq!(filtered, keys(&["foo.com"]));
+    }
+
+    #[test]
+    fn subdomain_matching_can_be_disabled_for_abp_rules() {
+        let wl = manager(&["example.com"], None, false);
+        let (filtered, removed) =
+            wl.filter_domains(&keys(&["||example.com^", "||ads.example.com^"]));
+        assert_eq!(removed, 1);
+        assert_eq!(filtered, keys(&["||ads.example.com^"]));
     }
 }
